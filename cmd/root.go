@@ -4,11 +4,13 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/leigme/gpf/config"
 	"github.com/leigme/gpf/model"
@@ -99,5 +101,41 @@ func paramCheck() error {
 }
 
 func generate() {
-	log.Printf("param: %s", p)
+	data, err := os.ReadFile(p.Template)
+	if err != nil {
+		log.Fatalln("path: ", p.Template, "read file fail", err)
+	}
+	t, err := template.New("gpf").Parse(string(data))
+	if err != nil {
+		log.Fatalln("path: ", p.Template, "parse template fail", err)
+	}
+	if _, err = os.Stat(p.Generate); err != nil {
+		if !os.IsNotExist(err) {
+			log.Fatalln("path: ", p.Generate, "generate file fail", err)
+		}
+		os.MkdirAll(filepath.Dir(p.Generate), os.ModePerm)
+	}
+	f, err := os.OpenFile(p.Generate, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Fatalln(err)
+		}
+	}()
+	w := bufio.NewWriter(f)
+	t.Execute(w, paramMap(p.Args))
+	w.Flush()
+}
+
+func paramMap(arg string) map[string]interface{} {
+	result := make(map[string]interface{}, 0)
+	args := strings.Split(arg, ",")
+	if len(args) > 0 {
+		for _, s := range args {
+			v := strings.Split(s, ":")
+			if len(v) == 2 {
+				result[v[0]] = v[1]
+			}
+		}
+	}
+	return result
 }
